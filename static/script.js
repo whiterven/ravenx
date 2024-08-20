@@ -1,7 +1,6 @@
 const typingForm = document.querySelector(".typing-form");
 const chatContainer = document.querySelector(".chat-list");
 const suggestions = document.querySelectorAll(".suggestion");
-const toggleThemeButton = document.querySelector("#theme-toggle-button");
 const deleteChatButton = document.querySelector("#delete-chat-button");
 const uploadImageButton = document.querySelector("#upload-image-button");
 const voiceInputButton = document.querySelector("#voice-input-button");
@@ -10,29 +9,35 @@ const sidebar = document.querySelector('.sidebar');
 const sidebarToggle = document.querySelector('#sidebar-toggle');
 const mainContent = document.querySelector('.main-content');
 const previousChats = document.querySelector('.previous-chats');
+const typingInput = document.querySelector('.typing-input');
+const audioPreview = document.querySelector('#audio-preview');
+const audioPlayer = document.querySelector('#audio-player');
+const cancelAudioButton = document.querySelector('#cancel-audio');
+const sendAudioButton = document.querySelector('#send-audio');
 
 // State variables
 let userMessage = null;
 let isResponseGenerating = false;
+let mediaRecorder;
+let audioChunks = [];
 
 // API configuration
-const API_KEY = "AIzaSyC7rRzi3oeNbDPGr7g_-QyJVOHFwIDkZQo"; // Your API key here
+const API_KEY = "AIzaSyC7rRzi3oeNbDPGr7g_-QyJVOHFwIDkZQo";
 const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${API_KEY}`;
 
-// Load theme and chat data from local storage on page load
+// Load chat data from local storage on page load
 const loadDataFromLocalstorage = () => {
   const savedChats = localStorage.getItem("saved-chats");
-  const isLightMode = (localStorage.getItem("themeColor") === "light_mode");
-
-  // Apply the stored theme
-  document.body.classList.toggle("light_mode", isLightMode);
-  toggleThemeButton.innerText = isLightMode ? "dark_mode" : "light_mode";
 
   // Restore saved chats or clear the chat container
   chatContainer.innerHTML = savedChats || '';
   document.body.classList.toggle("hide-header", savedChats);
 
   chatContainer.scrollTo(0, chatContainer.scrollHeight); // Scroll to the bottom
+  
+  // Load previous chats into sidebar
+  const chatTitles = JSON.parse(localStorage.getItem("chat-titles")) || [];
+  chatTitles.forEach(title => addChatToSidebar(title));
 };
 
 // Create a new message element and return it
@@ -127,7 +132,7 @@ const copyMessage = (copyButton) => {
 
 // Handle sending outgoing chat messages
 const handleOutgoingChat = () => {
-  userMessage = typingForm.querySelector(".typing-input").value.trim() || userMessage;
+  userMessage = typingInput.value.trim() || userMessage;
   if (!userMessage || isResponseGenerating) return; // Exit if there is no message or response is generating
 
   isResponseGenerating = true;
@@ -135,7 +140,9 @@ const handleOutgoingChat = () => {
   const html = `<div class="message-content">
                   <img class="avatar" src="static/images/user.png" alt="User avatar">
                   <p class="text"></p>
-                </div>`;
+                </div>
+                <span onClick="editMessage(this)" class="icon material-symbols-rounded">edit</span>
+                <span onClick="regenerateResponse(this)" class="icon material-symbols-rounded">refresh</span>`;
 
   const outgoingMessageDiv = createMessageElement(html, "outgoing");
   outgoingMessageDiv.querySelector(".text").innerText = userMessage;
@@ -153,31 +160,90 @@ const handleImageUpload = () => {
   input.type = 'file';
   input.accept = 'image/*';
   input.onchange = (event) => {
-      const file = event.target.files[0];
-      if (file) {
-          // TODO: Handle image upload to server and response here
-          console.log(`Image selected: ${file.name}`);
-      }
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.alt = 'Uploaded Image';
+        userMessage = `<img src="${e.target.result}" alt="Uploaded Image">`;
+        handleOutgoingChat();
+      };
+      reader.readAsDataURL(file);
+    }
   };
   input.click();
 };
 
 // Function to handle voice input
 const handleVoiceInput = () => {
-  if ('webkitSpeechRecognition' in window) {
-      const recognition = new webkitSpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
 
-      recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript;
-          typingForm.querySelector(".typing-input").value = transcript;
-      };
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
+        };
 
-      recognition.start();
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          audioPlayer.src = audioUrl;
+          audioPreview.classList.remove('hidden');
+        };
+
+        mediaRecorder.start();
+        voiceInputButton.textContent = 'stop';
+      })
+      .catch(error => console.error('Error accessing microphone:', error));
   } else {
-      console.log('Speech recognition not supported');
+    console.log('getUserMedia not supported on your browser!');
   }
+};
+
+// Function to stop recording
+const stopRecording = () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    voiceInputButton.textContent = 'mic';
+  }
+};
+
+// Function to edit user message
+const editMessage = (editButton) => {
+  const messageDiv = editButton.parentElement;
+  const textElement = messageDiv.querySelector('.text');
+  const originalText = textElement.innerText;
+
+  textElement.contentEditable = true;
+  textElement.focus();
+
+  const saveButton = document.createElement('span');
+  saveButton.className = 'icon material-symbols-rounded';
+  saveButton.textContent = 'save';
+  saveButton.onclick = () => {
+    textElement.contentEditable = false;
+    userMessage = textElement.innerText;
+    saveButton.remove();
+    regenerateResponse(editButton);
+  };
+
+  messageDiv.appendChild(saveButton);
+};
+
+// Function to regenerate response
+const regenerateResponse = (regenerateButton) => {
+  const messageDiv = regenerateButton.parentElement;
+  const nextMessage = messageDiv.nextElementSibling;
+
+  if (nextMessage && nextMessage.classList.contains('incoming')) {
+    nextMessage.remove();
+  }
+
+  showLoadingAnimation();
 };
 
 sidebarToggle.addEventListener('click', () => {
@@ -196,10 +262,15 @@ function addChatToSidebar(chatTitle) {
 // Modify the startNewChat function
 function startNewChat() {
   if (chatContainer.innerHTML.trim() !== '') {
-    const chatTitle = `Chat ${previousChats.children.length + 1}`;
+    const chatTitle = userMessage ? userMessage.substring(0, 30) : `Chat ${previousChats.children.length + 1}`;
     addChatToSidebar(chatTitle);
     // Save current chat before clearing
     localStorage.setItem(chatTitle, chatContainer.innerHTML);
+    
+    // Update chat titles in local storage
+    const chatTitles = JSON.parse(localStorage.getItem("chat-titles")) || [];
+    chatTitles.push(chatTitle);
+    localStorage.setItem("chat-titles", JSON.stringify(chatTitles));
   }
 
   chatContainer.innerHTML = '';
@@ -217,11 +288,6 @@ function loadChat(chatTitle) {
     chatContainer.scrollTo(0, chatContainer.scrollHeight);
   }
 }
-
-// Move theme toggle and delete buttons to sidebar
-const sidebarBottom = document.querySelector('.sidebar-bottom');
-sidebarBottom.appendChild(toggleThemeButton);
-sidebarBottom.appendChild(deleteChatButton);
 
 // Update delete functionality to clear sidebar as well
 deleteChatButton.addEventListener("click", () => {
@@ -243,13 +309,44 @@ suggestions.forEach(suggestion => {
 
 // Event listeners for new buttons
 uploadImageButton.addEventListener("click", handleImageUpload);
-voiceInputButton.addEventListener("click", handleVoiceInput);
+voiceInputButton.addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    stopRecording();
+  } else {
+    handleVoiceInput();
+  }
+});
 newChatButton.addEventListener("click", startNewChat);
+
+cancelAudioButton.addEventListener("click", () => {
+  audioPreview.classList.add('hidden');
+  audioPlayer.src = '';
+});
+
+sendAudioButton.addEventListener("click", () => {
+  userMessage = `[Audio Message]`;
+  handleOutgoingChat();
+  audioPreview.classList.add('hidden');
+  audioPlayer.src = '';
+});
 
 // Prevent default form submission and handle outgoing chat
 typingForm.addEventListener("submit", (e) => {
   e.preventDefault();
   handleOutgoingChat();
+});
+
+// Save current chat to recent chats when the page is about to unload
+window.addEventListener('beforeunload', () => {
+  if (chatContainer.innerHTML.trim() !== '') {
+    startNewChat();
+  }
+});
+
+// Auto-expand textarea
+typingInput.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = (this.scrollHeight) + 'px';
 });
 
 loadDataFromLocalstorage();

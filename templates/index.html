@@ -12,23 +12,23 @@
   <!-- Sidebar -->
   <div class="sidebar">
     <button id="sidebar-toggle" class="icon material-symbols-rounded">chevron_left</button>
-    <button id="new-chat-button" class="icon material-symbols-rounded">add</button>
-    <div class="previous-chats">
-      <!-- Previous chats will be dynamically added here -->
+    <div class="sidebar-content">
+      <button id="new-chat-button" class="icon material-symbols-rounded">add</button>
+      <hr class="divider">
+      <div class="previous-chats">
+        <!-- Previous chats will be dynamically added here -->
+      </div>
     </div>
     <div class="sidebar-bottom">
-      <button id="theme-toggle-button" class="icon material-symbols-rounded">light_mode</button>
       <button id="delete-chat-button" class="icon material-symbols-rounded">delete</button>
     </div>
   </div>
-
   <!-- Main Content -->
   <div class="main-content">
     <header class="header">
       <!-- Header Greetings -->
       <h1 class="title">Hello, there</h1>
       <p class="subtitle">How can I help you today?</p>
-
       <!-- Suggestion list -->
       <ul class="suggestion-list">
         <li class="suggestion">
@@ -49,28 +49,30 @@
         </li>
       </ul>
     </header>
-
     <!-- Chat List / Container -->
     <div class="chat-list">
       <!-- Chat messages will be appended here -->
     </div>
-
     <!-- Typing Area -->
     <div class="typing-area">
       <form action="#" class="typing-form">
         <div class="input-wrapper">
-          <input type="text" placeholder="Enter a prompt here" class="typing-input" required />
+          <textarea placeholder="Enter a prompt here" class="typing-input" required></textarea>
           <button type="button" id="upload-image-button" class="icon material-symbols-rounded">image</button>
           <button type="button" id="voice-input-button" class="icon material-symbols-rounded">mic</button>
           <button type="submit" id="send-message-button" class="icon material-symbols-rounded">send</button>
         </div>
       </form>
+      <div id="audio-preview" class="hidden">
+        <audio id="audio-player" controls></audio>
+        <button id="cancel-audio">Cancel</button>
+        <button id="send-audio">Send</button>
+      </div>
       <p class="disclaimer-text">
         RavenX may display inaccurate info, including about people, so double-check its responses.
       </p>
     </div>
   </div>
-
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
