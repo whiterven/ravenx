@@ -21,6 +21,9 @@ CORS(app)
 UPLOAD_FOLDER = tempfile.gettempdir()
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'mp3', 'mp4', 'wav'}
 
+#vercel env add GEMINI_API_KEY AIzaSyBt_EAPHZVUaxX69SGjE_7uSbRvrFWS0Og
+
+
 # Configure Gemini
 if not os.getenv("GEMINI_API_KEY"):
     raise ValueError("GEMINI_API_KEY not found in environment variables")
